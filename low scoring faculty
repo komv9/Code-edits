@@ -8,7 +8,8 @@ with Low_Score_Faculty as (
                 
                 concat("https://www.bambinos.live/admin/recordingfeedback/", vr.id) as Feedback_Link, 
             
-                DENSE_RANK() over(partition by f.id,cs.class_date order by cs.start_time asc) as Class_Number_of_Each_Day
+                DENSE_RANK() over(partition by f.id,cs.class_date order by cs.start_time asc) as Class_Number_of_Each_Day, 
+                fs.id, round(fs.d2c_mtd_conv_percent) as mtd_conv_percent, round(fs.renewal_mtd_renewal_count/(fs.renewal_mtd_renewal_count + fs.dropout_mtd_count)*100) as mtd_renewal_percent
             
         /*    time(vr.recording_start) as Record_Start,time(vr.recording_end) as Record_End,
              sum(timestampdiff(minute,time(vr.recording_start),time(vr.recording_end))) as Record_Time,
@@ -22,12 +23,15 @@ with Low_Score_Faculty as (
         Left Join classschedulebookings as csb on cs.id = csb.classschedule_id 
         Left Join videorecordings as vr on cs.id = vr.classschedule_id 
         Left Join recordingfeedbacks as rf on cs.id = rf.classschedule_id
-    where   (f.overall_score<=5) and csb.attended_class="Yes" and csb.is_cancelled="No" and 
+        left join facultystats as fs on csf.faculty_id = fs.faculty_id and date(fs.record_date) = current_date
+    -- where   (f.overall_score<=5) and csb.attended_class="Yes" and csb.is_cancelled="No" and
+    where   (round(fs.d2c_mtd_conv_percent) < 20 and (round(fs.renewal_mtd_renewal_count/(fs.renewal_mtd_renewal_count + fs.dropout_mtd_count)*100) < 50)) and csb.attended_class="Yes" and csb.is_cancelled="No" and
             (cs.class_date >= date(date_add(now(6), INTERVAL -7 day))  AND cs.class_date < date(now(6)))  
         group by f.id,cs.id,cs.class_date,cs.start_time
         order by f.id,class_date,WeekDay 
 )
-Select Faculty_Id,Faculty_Name,Score,Classschedule_id,Class_Date, Class_Time,WeekDay,Class_Number_of_Each_Day,Class_Name,Demo_Class,overall_comments,Overall_Rating,Video_Link,Feedback_Link, RF_Classschdeule_id 
+Select Faculty_Id,Faculty_Name,Score,Classschedule_id,Class_Date, Class_Time,WeekDay,Class_Number_of_Each_Day,Class_Name,Demo_Class,overall_comments,Overall_Rating,Video_Link,Feedback_Link, RF_Classschdeule_id
+,mtd_conv_percent, mtd_renewal_percent
 from Low_Score_Faculty
 where WeekDay in (0,2,4) and Class_Number_of_Each_Day = 1 and RF_Classschdeule_id is NULL
 group by Faculty_Id,Classschedule_id
